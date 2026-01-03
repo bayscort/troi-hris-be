@@ -2,6 +2,7 @@ package com.project.troyoffice.controller;
 
 import com.project.troyoffice.dto.*;
 import com.project.troyoffice.enums.EducationLevel;
+import com.project.troyoffice.enums.EmployeeCategory;
 import com.project.troyoffice.model.Employee;
 import com.project.troyoffice.service.EmployeeService;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -89,20 +90,22 @@ public class EmployeeController {
             @RequestParam(required = false) List<UUID> jobReferenceIds,
             @RequestParam(required = false) EducationLevel educationMin,
             @RequestParam(required = false) EducationLevel educationMax,
+            @RequestParam(required = false) EmployeeCategory category,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-
         return ResponseEntity.ok(
                 employeeService.search(
                         jobReferenceIds,
                         educationMin,
                         educationMax,
+                        category,
                         page,
                         size
                 )
         );
     }
+
 
 
 

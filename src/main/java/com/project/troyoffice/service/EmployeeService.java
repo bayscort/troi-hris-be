@@ -2,6 +2,7 @@ package com.project.troyoffice.service;
 
 import com.project.troyoffice.dto.*;
 import com.project.troyoffice.enums.EducationLevel;
+import com.project.troyoffice.enums.EmployeeCategory;
 import com.project.troyoffice.mapper.EmployeeMapper;
 import com.project.troyoffice.model.*;
 import com.project.troyoffice.repository.EmployeeRepository;
@@ -288,10 +289,10 @@ public class EmployeeService {
             List<UUID> jobReferenceIds,
             EducationLevel educationMin,
             EducationLevel educationMax,
+            EmployeeCategory category,
             int page,
             int size
     ) {
-
         Pageable pageable = PageRequest.of(
                 page,
                 size,
@@ -300,9 +301,8 @@ public class EmployeeService {
 
         Specification<Employee> spec = Specification
                 .where(EmployeeSpecification.hasAnyJobReference(jobReferenceIds))
-                .and(EmployeeSpecification.educationLevelBetween(
-                        educationMin, educationMax
-                ));
+                .and(EmployeeSpecification.educationLevelBetween(educationMin, educationMax))
+                .and(EmployeeSpecification.byCategory(category));
 
         return employeeRepository.findAll(
                 (root, query, cb) -> {
@@ -312,6 +312,7 @@ public class EmployeeService {
                 pageable
         ).map(employeeMapper::toDTO);
     }
+
 
 
 

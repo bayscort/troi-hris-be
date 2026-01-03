@@ -65,7 +65,7 @@ public class Employee extends AuditableEntity {
     @JoinColumn(name = "user_id", unique = true)
     private User user;
 
-    @OneToMany(mappedBy = "employee", fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "employee", cascade = CascadeType.ALL)
     private List<Placement> placements;
 
     @OneToMany(

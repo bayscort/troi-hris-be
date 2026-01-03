@@ -62,5 +62,6 @@ public class EmployeeResponseDTO {
     private List<EmployeeJobReferenceResponseDTO> jobReferences;
 
     private List<EmployeeEducationDTO> educations;
+    private List<PlacementDTO> placements;
 
 }

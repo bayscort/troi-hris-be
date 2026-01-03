@@ -1,12 +1,15 @@
 package com.project.troyoffice.specification;
 
 import com.project.troyoffice.enums.EducationLevel;
+import com.project.troyoffice.enums.EmployeeCategory;
 import com.project.troyoffice.model.Employee;
 import com.project.troyoffice.model.EmployeeEducation;
 import com.project.troyoffice.model.EmployeeJobReference;
+import com.project.troyoffice.model.Placement;
 import jakarta.persistence.criteria.*;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -124,6 +127,70 @@ public class EmployeeSpecification {
                 .filter(l -> l.ordinal() >= minOrd && l.ordinal() <= maxOrd)
                 .toList();
     }
+
+    public static Specification<Employee> byCategory(EmployeeCategory category) {
+        return (root, query, cb) -> {
+
+            if (category == null || category == EmployeeCategory.ALL) {
+                return cb.conjunction();
+            }
+
+            LocalDate today = LocalDate.now();
+
+            switch (category) {
+                case ACTIVE -> {
+                    Subquery<UUID> sub = query.subquery(UUID.class);
+                    Root<Placement> p = sub.from(Placement.class);
+
+                    sub.select(p.get("employee").get("id"))
+                            .where(
+                                    cb.equal(p.get("employee"), root),
+                                    cb.isTrue(p.get("isActive")),
+                                    cb.lessThanOrEqualTo(p.get("startDate"), today),
+                                    cb.or(
+                                            cb.isNull(p.get("endDate")),
+                                            cb.greaterThanOrEqualTo(p.get("endDate"), today)
+                                    )
+                            );
+
+                    return cb.and(
+                            cb.isTrue(root.get("active")),
+                            cb.exists(sub)
+                    );
+                }
+
+                case TALENT_POOL -> {
+                    Subquery<UUID> sub = query.subquery(UUID.class);
+                    Root<Placement> p = sub.from(Placement.class);
+
+                    sub.select(p.get("employee").get("id"))
+                            .where(
+                                    cb.equal(p.get("employee"), root),
+                                    cb.isTrue(p.get("isActive")),
+                                    cb.lessThanOrEqualTo(p.get("startDate"), today),
+                                    cb.or(
+                                            cb.isNull(p.get("endDate")),
+                                            cb.greaterThanOrEqualTo(p.get("endDate"), today)
+                                    )
+                            );
+
+                    return cb.and(
+                            cb.isTrue(root.get("active")),
+                            cb.not(cb.exists(sub))
+                    );
+                }
+
+                case INACTIVE -> {
+                    return cb.isFalse(root.get("active"));
+                }
+
+                default -> {
+                    return cb.conjunction();
+                }
+            }
+        };
+    }
+
 
 
 }
