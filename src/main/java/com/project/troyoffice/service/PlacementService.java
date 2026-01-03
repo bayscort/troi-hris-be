@@ -1,14 +1,8 @@
 package com.project.troyoffice.service;
 
 import com.project.troyoffice.dto.DeployEmployeeRequest;
-import com.project.troyoffice.model.Client;
-import com.project.troyoffice.model.ClientSite;
-import com.project.troyoffice.model.Employee;
-import com.project.troyoffice.model.Placement;
-import com.project.troyoffice.repository.ClientRepository;
-import com.project.troyoffice.repository.ClientSiteRepository;
-import com.project.troyoffice.repository.EmployeeRepository;
-import com.project.troyoffice.repository.PlacementRepository;
+import com.project.troyoffice.model.*;
+import com.project.troyoffice.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -26,6 +20,7 @@ public class PlacementService {
     private final EmployeeRepository employeeRepository;
     private final ClientRepository clientRepository;
     private final ClientSiteRepository clientSiteRepository;
+    private final JobPositionRepository jobPositionRepository;
 
     // 5. DEPLOY EMPLOYEE
     public Placement deployEmployee(DeployEmployeeRequest req) {
@@ -50,11 +45,18 @@ public class PlacementService {
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Site not found"));
         }
 
+        JobPosition jobPosition = null;
+        if (req.getJobPositionId() != null) {
+            jobPosition = jobPositionRepository.findById(req.getJobPositionId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Job position not found"));
+        }
+
         Placement placement = new Placement();
         placement.setEmployee(employee);
         placement.setClient(client);
         placement.setClientSite(site);
         placement.setJobTitle(req.getJobTitle());
+        placement.setJobPosition(jobPosition);
         placement.setEmployeeIdAtClient(req.getEmployeeIdAtClient());
         placement.setEmploymentType(req.getEmploymentType());
         placement.setStartDate(req.getStartDate());

@@ -34,6 +34,10 @@ public class Placement extends AuditableEntity {
     @JoinColumn(name = "client_site_id") // Nullable: Jika statusnya "Bench" atau WFH
     private ClientSite clientSite;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "job_position_id") // Nullable: Jika statusnya "Bench" atau WFH
+    private JobPosition jobPosition;
+
     // Jabatan spesifik di klien ini (Beda dengan jabatan internal)
     @Column(nullable = false)
     private String jobTitle; // Contoh: "Security Guard", "Java Developer"

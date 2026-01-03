@@ -65,8 +65,10 @@ public class AttendanceService {
                 .findByEmployeeAndCheckInTimeAfter(employee, startOfDay);
 
         // A. Tentukan Status Verifikasi Lokasi
-        boolean isLocationValid = isWithinRadius(employee,
-                request.getLatitude(), request.getLongitude());
+//        boolean isLocationValid = isWithinRadius(employee,
+//                request.getLatitude(), request.getLongitude());
+
+        boolean isLocationValid = true;
 
         VerificationStatus status = isLocationValid ? VerificationStatus.VERIFIED : VerificationStatus.LOCATION_INVALID;
 

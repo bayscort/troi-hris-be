@@ -19,7 +19,9 @@ public class DeployEmployeeRequest {
 
     private UUID clientSiteId;
 
-    @NotBlank
+    @NotNull
+    private UUID jobPositionId;
+
     private String jobTitle;
 
     private String employeeIdAtClient;
