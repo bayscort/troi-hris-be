@@ -1,17 +1,23 @@
 package com.project.troyoffice.service;
 
 import com.project.troyoffice.dto.*;
+import com.project.troyoffice.enums.EducationLevel;
 import com.project.troyoffice.mapper.EmployeeMapper;
 import com.project.troyoffice.model.*;
 import com.project.troyoffice.repository.EmployeeRepository;
 import com.project.troyoffice.repository.JobReferenceRepository;
 import com.project.troyoffice.repository.PlacementRepository;
+import com.project.troyoffice.specification.EmployeeSpecification;
 import com.project.troyoffice.util.NotFoundException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -276,6 +282,35 @@ public class EmployeeService {
                     });
         }
         return res;
+    }
+
+    public Page<EmployeeResponseDTO> search(
+            List<UUID> jobReferenceIds,
+            EducationLevel educationMin,
+            EducationLevel educationMax,
+            int page,
+            int size
+    ) {
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by("fullName").ascending()
+        );
+
+        Specification<Employee> spec = Specification
+                .where(EmployeeSpecification.hasAnyJobReference(jobReferenceIds))
+                .and(EmployeeSpecification.educationLevelBetween(
+                        educationMin, educationMax
+                ));
+
+        return employeeRepository.findAll(
+                (root, query, cb) -> {
+                    query.distinct(true);
+                    return spec.toPredicate(root, query, cb);
+                },
+                pageable
+        ).map(employeeMapper::toDTO);
     }
 
 

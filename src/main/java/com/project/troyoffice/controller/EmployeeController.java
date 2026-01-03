@@ -1,11 +1,13 @@
 package com.project.troyoffice.controller;
 
 import com.project.troyoffice.dto.*;
+import com.project.troyoffice.enums.EducationLevel;
 import com.project.troyoffice.model.Employee;
 import com.project.troyoffice.service.EmployeeService;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -81,5 +83,27 @@ public class EmployeeController {
         employeeService.offboardEmployee(id, request);
         return ResponseEntity.ok().build();
     }
+
+    @GetMapping("/search")
+    public ResponseEntity<Page<EmployeeResponseDTO>> search(
+            @RequestParam(required = false) List<UUID> jobReferenceIds,
+            @RequestParam(required = false) EducationLevel educationMin,
+            @RequestParam(required = false) EducationLevel educationMax,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+
+        return ResponseEntity.ok(
+                employeeService.search(
+                        jobReferenceIds,
+                        educationMin,
+                        educationMax,
+                        page,
+                        size
+                )
+        );
+    }
+
+
 
 }

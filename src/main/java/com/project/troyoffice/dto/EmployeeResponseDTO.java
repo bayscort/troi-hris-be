@@ -59,7 +59,7 @@ public class EmployeeResponseDTO {
 //    @OneToMany(mappedBy = "employee", fetch = FetchType.LAZY)
 //    private List<Placement> placements;
 
-    private List<EmployeeJobReferenceDTO> jobReferences;
+    private List<EmployeeJobReferenceResponseDTO> jobReferences;
 
     private List<EmployeeEducationDTO> educations;
 

@@ -26,7 +26,7 @@ public class EmployeeEducation extends AuditableEntity {
 
     private String schoolName;
 
-    @Enumerated(EnumType.STRING)
+    @Enumerated(EnumType.ORDINAL)
     private EducationLevel level;
 
     private String major;
