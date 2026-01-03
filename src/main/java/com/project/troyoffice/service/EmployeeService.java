@@ -2,27 +2,27 @@ package com.project.troyoffice.service;
 
 import com.project.troyoffice.dto.*;
 import com.project.troyoffice.mapper.EmployeeMapper;
-import com.project.troyoffice.mapper.RoleMapper;
-import com.project.troyoffice.model.Employee;
-import com.project.troyoffice.model.Placement;
-import com.project.troyoffice.model.Role;
+import com.project.troyoffice.model.*;
 import com.project.troyoffice.repository.EmployeeRepository;
+import com.project.troyoffice.repository.JobReferenceRepository;
 import com.project.troyoffice.repository.PlacementRepository;
-import com.project.troyoffice.repository.RoleRepository;
 import com.project.troyoffice.util.NotFoundException;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +37,8 @@ public class EmployeeService {
     private final EmployeeMapper employeeMapper;
 
     private final UserService userService;
+
+    private final JobReferenceRepository jobReferenceRepository;
 
     @Transactional(readOnly = true)
     public List<EmployeeResponseDTO> findAll() {
@@ -54,16 +56,145 @@ public class EmployeeService {
     }
 
     public UUID create(EmployeeRequestDTO dto) {
-        Employee entity = employeeMapper.toEntity(dto);
-        entity.setActive(true);
-        return employeeRepository.save(entity).getId();
+
+        Employee employee = employeeMapper.toEntity(dto);
+        employee.setActive(true);
+
+        // =========================
+        // EDUCATIONS
+        // =========================
+        if (dto.getEducations() != null) {
+            List<EmployeeEducation> educations = dto.getEducations()
+                    .stream()
+                    .map(e -> {
+                        EmployeeEducation edu = new EmployeeEducation();
+                        edu.setSchoolName(e.getSchoolName());
+                        edu.setLevel(e.getLevel());
+                        edu.setMajor(e.getMajor());
+                        edu.setStartYear(e.getStartYear());
+                        edu.setEndYear(e.getEndYear());
+                        edu.setEmployee(employee); // 🔥 IMPORTANT
+                        return edu;
+                    })
+                    .toList();
+
+            employee.setEducations(educations);
+        }
+
+        // =========================
+        // JOB REFERENCES
+        // =========================
+        if (dto.getJobReferences() != null) {
+            List<EmployeeJobReference> refs = dto.getJobReferences()
+                    .stream()
+                    .map(r -> {
+                        EmployeeJobReference ref = new EmployeeJobReference();
+                        ref.setEmployee(employee);
+
+                        JobReference jobRef =
+                                jobReferenceRepository.getReferenceById(r.getJobReferenceId());
+                        ref.setJobReference(jobRef);
+
+                        ref.setSkillLevel(r.getSkillLevel());
+                        ref.setExperienceYears(r.getExperienceYears());
+                        return ref;
+                    })
+                    .toList();
+
+            employee.setJobReferences(refs);
+        }
+
+        return employeeRepository.save(employee).getId();
     }
 
-    public void update(UUID id, EmployeeRequestDTO dto) {
-        Employee entity = employeeRepository.findById(id)
-                .orElseThrow(NotFoundException::new);
-        employeeMapper.toUpdate(entity, dto);
-        employeeRepository.save(entity);
+    public UUID update(EmployeeRequestDTO dto) {
+
+        Employee employee = employeeRepository.findById(dto.getId())
+                .orElseThrow(() -> new EntityNotFoundException("Employee not found"));
+
+        // =========================
+        // UPDATE BASIC FIELD
+        // =========================
+        employeeMapper.updateEntity(dto, employee);
+
+        // =========================
+        // UPDATE EDUCATIONS
+        // =========================
+        if (dto.getEducations() != null) {
+
+            // Map existing by ID
+            Map<UUID, EmployeeEducation> existingMap =
+                    employee.getEducations().stream()
+                            .filter(e -> e.getId() != null)
+                            .collect(Collectors.toMap(EmployeeEducation::getId, Function.identity()));
+
+            List<EmployeeEducation> updatedList = new ArrayList<>();
+
+            for (EmployeeEducationDTO e : dto.getEducations()) {
+
+                EmployeeEducation edu;
+
+                if (e.getId() != null && existingMap.containsKey(e.getId())) {
+                    // UPDATE EXISTING
+                    edu = existingMap.get(e.getId());
+                } else {
+                    // CREATE NEW
+                    edu = new EmployeeEducation();
+                    edu.setEmployee(employee);
+                }
+
+                edu.setSchoolName(e.getSchoolName());
+                edu.setLevel(e.getLevel());
+                edu.setMajor(e.getMajor());
+                edu.setStartYear(e.getStartYear());
+                edu.setEndYear(e.getEndYear());
+
+                updatedList.add(edu);
+            }
+
+            employee.getEducations().clear();
+            employee.getEducations().addAll(updatedList);
+        }
+
+        // =========================
+        // UPDATE JOB REFERENCES
+        // =========================
+        if (dto.getJobReferences() != null) {
+
+            Map<UUID, EmployeeJobReference> existingMap =
+                    employee.getJobReferences().stream()
+                            .filter(j -> j.getId() != null)
+                            .collect(Collectors.toMap(EmployeeJobReference::getId, Function.identity()));
+
+            List<EmployeeJobReference> updatedList = new ArrayList<>();
+
+            for (EmployeeJobReferenceDTO r : dto.getJobReferences()) {
+
+                EmployeeJobReference ref;
+
+                if (r.getId() != null && existingMap.containsKey(r.getId())) {
+                    ref = existingMap.get(r.getId());
+                } else {
+                    ref = new EmployeeJobReference();
+                    ref.setEmployee(employee);
+
+                    JobReference jobReference =
+                            jobReferenceRepository.getReferenceById(r.getJobReferenceId());
+                    ref.setJobReference(jobReference);
+                }
+
+                ref.setSkillLevel(r.getSkillLevel());
+                ref.setExperienceYears(r.getExperienceYears());
+                ref.setPrimaryReference(Boolean.TRUE.equals(r.getPrimaryReference()));
+
+                updatedList.add(ref);
+            }
+
+            employee.getJobReferences().clear();
+            employee.getJobReferences().addAll(updatedList);
+        }
+
+        return employee.getId();
     }
 
     public void delete(UUID id) {

@@ -1,12 +1,14 @@
 package com.project.troyoffice.model;
 
 import com.project.troyoffice.dto.base.AuditableEntity;
+import com.project.troyoffice.enums.Gender;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.UuidGenerator;
 import org.hibernate.envers.Audited;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -34,6 +36,29 @@ public class Employee extends AuditableEntity {
 
     private String phoneNumber;
 
+    private String placeOfBirth;
+    private LocalDate dateOfBirth;
+
+    private String province;
+    private String city;
+    private String district;
+    private String fullAddress;
+
+    @Enumerated(EnumType.STRING)
+    private Gender gender;
+
+    private String religion;
+    private String bloodType;
+
+    private Integer heightCm;
+    private Integer weightKg;
+
+//    private String parentName;
+    private Integer familyMemberCount;
+
+    private String emergencyContactName;
+    private String emergencyContactPhone;
+
     private Boolean active;
 
     @OneToOne(fetch = FetchType.LAZY)
@@ -42,5 +67,15 @@ public class Employee extends AuditableEntity {
 
     @OneToMany(mappedBy = "employee", fetch = FetchType.LAZY)
     private List<Placement> placements;
+
+    @OneToMany(
+            mappedBy = "employee",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<EmployeeJobReference> jobReferences;
+
+    @OneToMany(mappedBy = "employee", cascade = CascadeType.ALL)
+    private List<EmployeeEducation> educations;
 
 }
