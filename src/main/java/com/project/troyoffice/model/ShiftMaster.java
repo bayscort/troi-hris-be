@@ -22,8 +22,9 @@ public class ShiftMaster extends AuditableEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "client_id")
-    private UUID clientId;
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "client_id", nullable = false)
+    private Client client;
 
     @Column(nullable = false, length = 50)
     private String code; // e.g., "S1", "OFF"
