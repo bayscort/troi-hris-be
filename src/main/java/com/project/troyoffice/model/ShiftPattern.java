@@ -20,8 +20,9 @@ public class ShiftPattern extends AuditableEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "client_id", nullable = false)
-    private UUID clientId;
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "client_id", nullable = false)
+    private Client client;
 
     @Column(nullable = false)
     private String name; // e.g., "Security 4 Grup (2P-2M-2L)"

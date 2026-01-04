@@ -57,4 +57,6 @@ public class ShiftMaster extends AuditableEntity {
 
     @Column(name = "clock_in_window_minutes")
     private Integer clockInWindowMinutes = 60;
+
+    private String color;
 }

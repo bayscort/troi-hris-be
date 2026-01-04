@@ -3,9 +3,12 @@ package com.project.troyoffice.dto;
 import lombok.Data;
 
 import java.time.LocalTime;
+import java.util.UUID;
 
 @Data
 public class ShiftMasterDTO {
+
+    private UUID id;
 
     private ClientDTO client;
 

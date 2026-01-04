@@ -1,5 +1,6 @@
 package com.project.troyoffice.dto;
 
+import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -7,6 +8,7 @@ import java.util.UUID;
 
 @Getter
 @Setter
+@Builder
 public class ClientDTO {
 
     private UUID id;
