@@ -1,13 +1,18 @@
 package com.project.troyoffice.service;
 
 import com.project.troyoffice.dto.CreateJobPositionRequest;
+import com.project.troyoffice.dto.JobPositionResponseDTO;
+import com.project.troyoffice.mapper.JobPositionMapper;
 import com.project.troyoffice.model.Client;
 import com.project.troyoffice.model.JobPosition;
 import com.project.troyoffice.repository.ClientRepository;
 import com.project.troyoffice.repository.JobPositionRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -16,6 +21,8 @@ public class JobPositionService {
 
     private final JobPositionRepository jobPositionRepo;
     private final ClientRepository clientRepo;
+
+    private final JobPositionMapper jobPositionMapper;
 
     public JobPosition create(CreateJobPositionRequest req) {
         Client clientProxy = clientRepo.getReferenceById(req.getClientId());
@@ -28,6 +35,14 @@ public class JobPositionService {
                 .internalGradeCode(req.getInternalGradeCode())
                 .build();
         return jobPositionRepo.save(jobPosition);
+    }
+
+    @Transactional(readOnly = true)
+    public List<JobPositionResponseDTO> findAll() {
+        final List<JobPosition> jobPositions = jobPositionRepo.findAll(Sort.by("id"));
+        return jobPositions.stream()
+                .map(jobPositionMapper::toDTO)
+                .toList();
     }
 
 }

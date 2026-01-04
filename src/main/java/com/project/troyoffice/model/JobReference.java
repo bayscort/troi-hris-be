@@ -2,8 +2,7 @@ package com.project.troyoffice.model;
 
 import com.project.troyoffice.dto.base.AuditableEntity;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 import org.hibernate.envers.Audited;
 
 import java.util.UUID;
@@ -13,6 +12,9 @@ import java.util.UUID;
 @Getter
 @Setter
 @Audited
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class JobReference extends AuditableEntity {
 
     @Id
