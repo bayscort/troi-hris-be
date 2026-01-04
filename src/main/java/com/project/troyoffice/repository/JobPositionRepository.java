@@ -1,6 +1,8 @@
 package com.project.troyoffice.repository;
 
+import com.project.troyoffice.model.ClientSite;
 import com.project.troyoffice.model.JobPosition;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -23,4 +25,7 @@ public interface JobPositionRepository extends JpaRepository<JobPosition, UUID> 
     // Atau pakai JPQL manual:
     @Query("SELECT j FROM JobPosition j JOIN FETCH j.client WHERE j.isActive = true")
     List<JobPosition> findAllWithClient();
+
+    List<JobPosition> findByClientIdAndIsActiveTrue(UUID clientId, Sort sort);
+
 }

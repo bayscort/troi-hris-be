@@ -1,6 +1,7 @@
 package com.project.troyoffice.controller;
 
 import com.project.troyoffice.dto.AssignShiftPatternRequest;
+import com.project.troyoffice.dto.BulkAssignShiftPatternRequest;
 import com.project.troyoffice.service.ShiftService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -49,9 +50,9 @@ public class ShiftController {
         return ResponseEntity.ok().build();
     }
 
-    @PostMapping("/assign-pattern")
-    public ResponseEntity<?> assignPattern(@RequestBody @Valid AssignShiftPatternRequest req) {
-        shiftService.assignPattern(req);
+    @PostMapping("/bulk-assign-pattern")
+    public ResponseEntity<?> bulkAssignPattern(@RequestBody @Valid BulkAssignShiftPatternRequest req) {
+        shiftService.bulkAssignPattern(req);
         return ResponseEntity.ok("Pattern assigned and schedule generated successfully");
     }
 

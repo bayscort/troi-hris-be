@@ -1,6 +1,7 @@
 package com.project.troyoffice.service;
 
 import com.project.troyoffice.dto.AssignShiftPatternRequest;
+import com.project.troyoffice.dto.BulkAssignShiftPatternRequest;
 import com.project.troyoffice.model.*;
 import com.project.troyoffice.repository.EmployeeScheduleRepository;
 import com.project.troyoffice.repository.EmployeeShiftAssignmentRepository;
@@ -13,10 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -46,95 +44,138 @@ public class ShiftService {
         }
     }
 
-    private void generateForSingleEmployee(EmployeeShiftAssignment assignment, LocalDate start, LocalDate end) {
-        // Pre-load items pattern biar ga query berulang dalam loop
-        ShiftPattern pattern = assignment.getShiftPattern();
-        if (pattern == null) return; // Skip jika fixed shift (logic beda dikit)
+    public void bulkAssignPattern(BulkAssignShiftPatternRequest req) {
+        ShiftPattern pattern = shiftPatternRepository.findById(req.getShiftPatternId())
+                .orElseThrow(() -> new RuntimeException("Pattern not found"));
 
-        // Map Sequence Hari -> Shift Master (Biar akses cepat O(1))
-        Map<Integer, ShiftMaster> patternMap = pattern.getItems().stream()
-                .collect(Collectors.toMap(ShiftPatternItem::getDaySequence, ShiftPatternItem::getShiftMaster));
+        for (UUID employeeId : req.getEmployeeIds()) {
 
-        List<EmployeeSchedule> newSchedules = new ArrayList<>();
+            // 1. STEP PENTING: Tutup Assignment Lama (Jika ada)
+            // Agar tidak ada 2 assignment aktif (double active)
+            terminateActiveAssignment(employeeId, req.getEffectiveDate());
 
-        // Loop setiap hari dalam range yang diminta
-        LocalDate currentDate = start;
-        while (!currentDate.isAfter(end)) {
+            // 2. Buat Assignment Baru
+            EmployeeShiftAssignment assignment = new EmployeeShiftAssignment();
+            assignment.setEmployeeId(employeeId);
+            assignment.setShiftPattern(pattern);
+            assignment.setEffectiveDate(req.getEffectiveDate()); // Mulai berlaku
 
-            // 2. Cek apakah sudah ada jadwal di tanggal ini?
-            // Jika sudah ada dan IS_LOCKED = true, jangan ditimpa (itu hasil tukar shift manual)
-            boolean exists = scheduleRepo.findByEmployeeIdAndDate(assignment.getEmployeeId(), currentDate)
-                    .map(EmployeeSchedule::isLocked)
-                    .orElse(false);
+            EmployeeShiftAssignment savedAssignment = assignmentRepo.save(assignment);
 
-            if (!exists) {
-                // 3. Hitung Matematika Pola (Modulo Arithmetic)
-                // Berapa hari selisih dari effective date?
-                long daysDiff = ChronoUnit.DAYS.between(assignment.getEffectiveDate(), currentDate);
-
-                if (daysDiff >= 0) {
-                    // Rumus: (Selisih Hari % Total Siklus) + 1
-                    // Contoh: Hari ke-0 = Sequence 1. Hari ke-1 = Sequence 2.
-                    int sequence = (int) (daysDiff % pattern.getCycleDays()) + 1;
-
-                    ShiftMaster shiftToBeApplied = patternMap.get(sequence);
-
-                    if (shiftToBeApplied != null) {
-                        newSchedules.add(createScheduleEntity(assignment.getEmployeeId(), currentDate, shiftToBeApplied));
-                    }
-                }
-            }
-            currentDate = currentDate.plusDays(1);
-        }
-
-        // 4. Batch Save
-        if (!newSchedules.isEmpty()) {
-            scheduleRepo.saveAll(newSchedules);
-            log.info("Generated {} schedules for employee {}", newSchedules.size(), assignment.getEmployeeId());
+            // 3. Trigger Generator
+            // Generate ulang jadwal dari tanggal efektif sampai 1 bulan ke depan
+            LocalDate generateUntil = req.getEffectiveDate().plusMonths(1);
+            generateForSingleEmployee(savedAssignment, req.getEffectiveDate(), generateUntil);
         }
     }
 
+    /**
+     * Helper: Menutup assignment lama H-1 sebelum assignment baru berlaku
+     */
+    private void terminateActiveAssignment(UUID employeeId, LocalDate newEffectiveDate) {
+        Optional<EmployeeShiftAssignment> activeAssign = assignmentRepo.findByEmployeeIdAndEndDateIsNull(employeeId);
+
+        if (activeAssign.isPresent()) {
+            EmployeeShiftAssignment existing = activeAssign.get();
+
+            // Set End Date ke HARI SEBELUM effective date baru
+            // Contoh: Pola baru mulai 5 Jan. Pola lama stop di 4 Jan.
+            LocalDate yesterday = newEffectiveDate.minusDays(1);
+
+            // Validasi kecil: Jangan sampai end date < start date (kalau admin salah input tanggal mundur)
+            if (yesterday.isBefore(existing.getEffectiveDate())) {
+                // Skenario edge case: Admin menimpa assignment yang baru saja dibuat hari ini
+                // Hapus saja assignment lama agar tidak error active date range invalid
+                assignmentRepo.delete(existing);
+            } else {
+                existing.setEndDate(yesterday);
+                assignmentRepo.save(existing);
+            }
+        }
+    }
+
+    /**
+     * LOGIC GENERATOR (Diperbarui untuk Handle UPDATE & LOCKED)
+     */
+    @Transactional
+    public void generateForSingleEmployee(EmployeeShiftAssignment assignment, LocalDate start, LocalDate end) {
+        ShiftPattern pattern = assignment.getShiftPattern();
+        if (pattern == null) return;
+
+        // Map Sequence untuk akses O(1)
+        Map<Integer, ShiftMaster> patternMap = pattern.getItems().stream()
+                .collect(Collectors.toMap(ShiftPatternItem::getDaySequence, ShiftPatternItem::getShiftMaster));
+
+        List<EmployeeSchedule> schedulesToSave = new ArrayList<>();
+
+        LocalDate currentDate = start;
+        while (!currentDate.isAfter(end)) {
+
+            // A. Cari Jadwal Eksisting
+            Optional<EmployeeSchedule> existingOpt = scheduleRepo.findByEmployeeIdAndDate(assignment.getEmployeeId(), currentDate);
+
+            // B. Hitung Shift apa yang seharusnya dipakai hari ini
+            long daysDiff = ChronoUnit.DAYS.between(assignment.getEffectiveDate(), currentDate);
+
+            // Hanya proses jika tanggal >= effective date
+            if (daysDiff >= 0) {
+                int sequence = (int) (daysDiff % pattern.getCycleDays()) + 1;
+                ShiftMaster targetShift = patternMap.get(sequence);
+
+                if (targetShift != null) {
+                    if (existingOpt.isPresent()) {
+                        // --- SKENARIO UPDATE ---
+                        EmployeeSchedule existingSchedule = existingOpt.get();
+
+                        // CEK KUNCI: Jika LOCKED, skip (jangan diubah)
+                        if (existingSchedule.isLocked()) {
+                            log.info("Skipping schedule update for {} on {} because it is LOCKED", assignment.getEmployeeId(), currentDate);
+                        } else {
+                            // Jika TIDAK LOCKED, timpa datanya (Update)
+                            updateScheduleEntity(existingSchedule, currentDate, targetShift);
+                            schedulesToSave.add(existingSchedule);
+                        }
+                    } else {
+                        // --- SKENARIO CREATE BARU ---
+                        schedulesToSave.add(createScheduleEntity(assignment.getEmployeeId(), currentDate, targetShift));
+                    }
+                }
+            }
+
+            currentDate = currentDate.plusDays(1);
+        }
+
+        if (!schedulesToSave.isEmpty()) {
+            scheduleRepo.saveAll(schedulesToSave);
+        }
+    }
+
+    // Helper: Membuat Object Baru
     private EmployeeSchedule createScheduleEntity(UUID employeeId, LocalDate date, ShiftMaster master) {
-        // Gabungkan Date + Time untuk jadi LocalDateTime
+        EmployeeSchedule schedule = new EmployeeSchedule();
+        schedule.setEmployeeId(employeeId);
+        // Panggil helper update untuk set field-nya (biar kodingan gak duplikat)
+        updateScheduleEntity(schedule, date, master);
+
+        // Default value khusus object baru
+        schedule.setLocked(false);
+        return schedule;
+    }
+
+    // Helper: Update Object yang sudah ada (By Reference)
+    private void updateScheduleEntity(EmployeeSchedule schedule, LocalDate date, ShiftMaster master) {
+        // Kalkulasi Waktu
         LocalDateTime actualStart = LocalDateTime.of(date, master.getStartTime());
         LocalDateTime actualEnd = LocalDateTime.of(date, master.getEndTime());
-
-        // Handle Cross Day (Shift Malam)
-        // Jika 22:00 - 06:00, maka end time harus tanggal besoknya
         if (master.isCrossDay()) {
             actualEnd = actualEnd.plusDays(1);
         }
 
-        return EmployeeSchedule.builder()
-                .employeeId(employeeId)
-                .date(date)
-                .shiftMaster(master)
-                .actualStartTime(actualStart)
-                .actualEndTime(actualEnd)
-                .isHoliday(master.isDayOff()) // Inherit dari master
-                .isLocked(false) // Auto generate selalu false
-                .build();
-    }
-
-    public void assignPattern(AssignShiftPatternRequest req) {
-        ShiftPattern pattern = shiftPatternRepository.findById(req.getShiftPatternId())
-                .orElseThrow(() -> new RuntimeException("Pattern not found"));
-
-        // Save Assignment ke DB
-        EmployeeShiftAssignment assignment = new EmployeeShiftAssignment();
-        assignment.setEmployeeId(req.getEmployeeId());
-        assignment.setShiftPattern(pattern);
-        assignment.setEffectiveDate(req.getEffectiveDate());
-
-        EmployeeShiftAssignment savedAssignment = assignmentRepo.save(assignment);
-
-        // --- TRIGGER GENERATOR ---
-        // Generate jadwal dari EffectiveDate sampai 1 bulan ke depan
-        // Agar admin langsung bisa lihat jadwalnya detik itu juga.
-        LocalDate generateUntil = req.getEffectiveDate().plusMonths(1);
-
-        // Panggil logic looping matematika yang dibuat di chat sebelumnya
-        // (Pastikan method generateForSingleEmployee diubah jadi public di ShiftService)
-        generateForSingleEmployee(savedAssignment, req.getEffectiveDate(), generateUntil);
+        // Set Values
+        schedule.setDate(date);
+        schedule.setShiftMaster(master);
+        schedule.setActualStartTime(actualStart);
+        schedule.setActualEndTime(actualEnd);
+        schedule.setHoliday(master.isDayOff());
     }
 }

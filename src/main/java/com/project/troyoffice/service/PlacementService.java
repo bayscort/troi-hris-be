@@ -1,6 +1,7 @@
 package com.project.troyoffice.service;
 
 import com.project.troyoffice.dto.DeployEmployeeRequest;
+import com.project.troyoffice.dto.EmployeeAssignmentDto;
 import com.project.troyoffice.model.*;
 import com.project.troyoffice.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +11,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDate;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -21,6 +29,7 @@ public class PlacementService {
     private final ClientRepository clientRepository;
     private final ClientSiteRepository clientSiteRepository;
     private final JobPositionRepository jobPositionRepository;
+    private final EmployeeShiftAssignmentRepository assignmentRepository;
 
     // 5. DEPLOY EMPLOYEE
     public Placement deployEmployee(DeployEmployeeRequest req) {
@@ -70,5 +79,55 @@ public class PlacementService {
     // 6. ACTIVE PLACEMENTS LIST
     public Page<Placement> getActivePlacements(Pageable pageable) {
         return placementRepository.findByIsActiveTrue(pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public List<EmployeeAssignmentDto> getActiveEmployeesForAssignment(UUID siteId, UUID jobPositionId) {
+
+        // 1. Ambil semua Placement Aktif di Site tersebut
+        List<Placement> placements = placementRepository.findActivePlacementsBySite(siteId, jobPositionId);
+
+        if (placements.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<UUID> employeeIds = placements.stream()
+                .map(Placement::getEmployee)
+                .map(Employee::getId)
+                .toList();
+
+        List<EmployeeShiftAssignment> assignments = assignmentRepository.findCurrentAssignments(employeeIds, LocalDate.now());
+
+        // 4. Map Assignment ke dalam Map agar pencarian O(1)
+        // Map<EmployeeID, Assignment>
+        Map<UUID, EmployeeShiftAssignment> assignmentMap = assignments.stream()
+                .collect(Collectors.toMap(
+                        EmployeeShiftAssignment::getEmployeeId,
+                        a -> a,
+                        (existing, replacement) -> existing // Jika ada duplikat (jarang), ambil yg pertama
+                ));
+
+        // 5. Gabungkan Data (Placement + Pattern Info)
+        return placements.stream().map(p -> {
+            EmployeeShiftAssignment activeAssignment = assignmentMap.get(p.getEmployee().getId());
+
+            String patternName = "-";
+            UUID patternId = null;
+
+            if (activeAssignment != null && activeAssignment.getShiftPattern() != null) {
+                patternName = activeAssignment.getShiftPattern().getName();
+                patternId = activeAssignment.getShiftPattern().getId();
+            }
+
+            return EmployeeAssignmentDto.builder()
+                    .employeeId(p.getEmployee().getId())
+                    .name(p.getEmployee().getFullName())
+                    .nik(p.getEmployee().getEmployeeNumber())
+                    .placementId(p.getId())
+                    .jobPositionName(p.getJobPosition().getTitle())
+                    .currentPatternId(patternId)
+                    .currentPatternName(patternName)
+                    .build();
+        }).collect(Collectors.toList());
     }
 }

@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping(value = "/api/job-positions", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -26,6 +27,11 @@ public class JobPositionController {
     @GetMapping
     public ResponseEntity<List<JobPositionResponseDTO>> getAll() {
         return ResponseEntity.ok(jobPositionService.findAll());
+    }
+
+    @GetMapping("/client/{clientId}")
+    public ResponseEntity<List<JobPositionResponseDTO>> getByClient(@PathVariable UUID clientId) {
+        return ResponseEntity.ok(jobPositionService.findByClient(clientId));
     }
 
 }
