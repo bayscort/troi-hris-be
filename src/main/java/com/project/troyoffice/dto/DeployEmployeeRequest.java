@@ -36,5 +36,14 @@ public class DeployEmployeeRequest {
 
     @NotNull
     private BigDecimal basicSalary;
+
+    @NotNull
+    private String username;
+
+    @NotNull
+    private String password;
+
+    @NotNull
+    private UUID roleId;
 }
 

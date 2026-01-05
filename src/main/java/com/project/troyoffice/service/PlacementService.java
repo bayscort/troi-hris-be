@@ -2,6 +2,7 @@ package com.project.troyoffice.service;
 
 import com.project.troyoffice.dto.DeployEmployeeRequest;
 import com.project.troyoffice.dto.EmployeeAssignmentDto;
+import com.project.troyoffice.dto.UserRequestDTO;
 import com.project.troyoffice.model.*;
 import com.project.troyoffice.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,8 @@ public class PlacementService {
     private final JobPositionRepository jobPositionRepository;
     private final EmployeeShiftAssignmentRepository assignmentRepository;
 
+    private final UserService  userService;
+
     // 5. DEPLOY EMPLOYEE
     public Placement deployEmployee(DeployEmployeeRequest req) {
         Employee employee = employeeRepository.findById(req.getEmployeeId())
@@ -59,6 +62,12 @@ public class PlacementService {
             jobPosition = jobPositionRepository.findById(req.getJobPositionId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Job position not found"));
         }
+
+        UserRequestDTO userRequestDTO = new UserRequestDTO();
+        userRequestDTO.setUsername(req.getUsername());
+        userRequestDTO.setPassword(req.getPassword());
+        userRequestDTO.setRoleId(req.getRoleId());
+        userService.create(userRequestDTO);
 
         Placement placement = new Placement();
         placement.setEmployee(employee);
