@@ -41,4 +41,6 @@ public interface EmployeeRepository
 
     boolean existsByIdentityNumber(String identityNumber);
 
+    List<Employee> findByEmployeeNumberIn(List<String> employeeNumbers);
+
 }

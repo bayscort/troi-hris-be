@@ -2,9 +2,11 @@ package com.project.troyoffice.service;
 
 import com.project.troyoffice.dto.AssignShiftPatternRequest;
 import com.project.troyoffice.dto.BulkAssignShiftPatternRequest;
+import com.project.troyoffice.dto.ManualScheduleDto;
 import com.project.troyoffice.model.*;
 import com.project.troyoffice.repository.EmployeeScheduleRepository;
 import com.project.troyoffice.repository.EmployeeShiftAssignmentRepository;
+import com.project.troyoffice.repository.ShiftMasterRepository;
 import com.project.troyoffice.repository.ShiftPatternRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +17,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -26,11 +29,8 @@ public class ShiftService {
     private final EmployeeScheduleRepository scheduleRepo;
 
     private final ShiftPatternRepository shiftPatternRepository;
+    private final ShiftMasterRepository shiftMasterRepository;
 
-    /**
-     * CORE LOGIC: Generate Jadwal Massal
-     * Method ini akan dipanggil oleh Scheduler atau API Manual
-     */
     @Transactional
     public void generateSchedules(LocalDate startDate, LocalDate endDate) {
         log.info("Starting schedule generation from {} to {}", startDate, endDate);
@@ -94,9 +94,6 @@ public class ShiftService {
         }
     }
 
-    /**
-     * LOGIC GENERATOR (Diperbarui untuk Handle UPDATE & LOCKED)
-     */
     @Transactional
     public void generateForSingleEmployee(EmployeeShiftAssignment assignment, LocalDate start, LocalDate end) {
         ShiftPattern pattern = assignment.getShiftPattern();
@@ -150,6 +147,60 @@ public class ShiftService {
         }
     }
 
+    public void importManualSchedules(List<ManualScheduleDto> manualSchedules) {
+        log.info("Processing {} manual schedule entries", manualSchedules.size());
+
+        // Optimasi: Cache ShiftMaster ke Map untuk menghindari query DB berulang di dalam loop
+        Map<String, ShiftMaster> shiftMasterMap = shiftMasterRepository.findAll().stream()
+                .collect(Collectors.toMap(ShiftMaster::getCode, Function.identity()));
+
+        List<EmployeeSchedule> schedulesToSave = new ArrayList<>();
+
+        for (ManualScheduleDto req : manualSchedules) {
+
+            // 1. Validasi Shift Code
+            ShiftMaster targetShift = shiftMasterMap.get(req.getShiftCode());
+            if (targetShift == null) {
+                log.warn("Shift Code '{}' not found for employee {}. Skipping.", req.getShiftCode(), req.getEmployeeId());
+                continue; // atau throw exception tergantung kebutuhan bisnis
+            }
+
+            // 2. Cek Jadwal Eksisting
+            Optional<EmployeeSchedule> existingOpt = scheduleRepo.findByEmployeeIdAndDate(req.getEmployeeId(), req.getDate());
+
+            if (existingOpt.isPresent()) {
+                EmployeeSchedule existing = existingOpt.get();
+
+                // Logic Bisnis: Apakah manual upload boleh menimpa jadwal yang sudah Locked?
+                // Biasanya Manual Upload = Override mutlak, jadi kita bisa tetap timpa,
+                // ATAU skip jika statusnya sudah "Approved/Locked" oleh Payroll.
+                // Di sini saya asumsikan Manual Upload adalah 'Super Edit', jadi kita timpa.
+
+                updateScheduleEntity(existing, req.getDate(), targetShift);
+
+                // PENTING: Set Locked = true
+                // Agar method 'generateSchedules' (pattern generator) TIDAK menimpa jadwal manual ini
+                // saat dijalankan di kemudian hari.
+                existing.setLocked(true);
+
+                schedulesToSave.add(existing);
+
+            } else {
+                // 3. Create Baru
+                EmployeeSchedule newSchedule = createScheduleEntity(req.getEmployeeId(), req.getDate(), targetShift);
+
+                // PENTING: Set Locked = true untuk jadwal manual
+                newSchedule.setLocked(true);
+
+                schedulesToSave.add(newSchedule);
+            }
+        }
+
+        // Batch Save
+        if (!schedulesToSave.isEmpty()) {
+            scheduleRepo.saveAll(schedulesToSave);
+        }
+    }
     // Helper: Membuat Object Baru
     private EmployeeSchedule createScheduleEntity(UUID employeeId, LocalDate date, ShiftMaster master) {
         EmployeeSchedule schedule = new EmployeeSchedule();
