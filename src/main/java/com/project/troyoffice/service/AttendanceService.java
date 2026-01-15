@@ -165,6 +165,25 @@ public class AttendanceService {
                 .collect(Collectors.toList());
     }
 
+    public List<AttendanceResponse> getAttendanceListAll( LocalDate startDate, LocalDate endDate) {
+
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+
+        List<Attendance> list = attendanceRepository
+                .findByCheckInTimeBetweenOrderByCheckInTimeDesc(start, end);
+
+        return list.stream()
+                .map(attendance -> {
+                    AttendanceResponse dto = attendanceMapper.toDTO(attendance);
+                    if (attendance.getEmployee() != null) {
+                        dto.setEmployeeName(attendance.getEmployee().getFullName());
+                    }
+                    return dto;
+                })
+                .collect(Collectors.toList());
+    }
+
     public List<AttendanceDetailResponse> getAttendanceDetailList(String employeeNumber, LocalDate startDate, LocalDate endDate) {
 
         Employee employee = employeeRepository.findByEmployeeNumber(employeeNumber)

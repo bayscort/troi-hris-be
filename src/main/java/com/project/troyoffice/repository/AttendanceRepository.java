@@ -15,4 +15,6 @@ public interface AttendanceRepository extends JpaRepository<Attendance, UUID> {
 
     List<Attendance> findByEmployeeAndCheckInTimeBetweenOrderByCheckInTimeDesc(
             Employee employee, LocalDateTime startDate, LocalDateTime endDate);
+
+    List<Attendance> findByCheckInTimeBetweenOrderByCheckInTimeDesc(LocalDateTime startDate, LocalDateTime endDate);
 }

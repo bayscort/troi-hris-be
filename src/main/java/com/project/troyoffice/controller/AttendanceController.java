@@ -38,6 +38,14 @@ public class AttendanceController {
         return attendanceService.getAttendanceList(start, end);
     }
 
+    @GetMapping("/list/all")
+    public List<AttendanceResponse> getAttendanceListAll(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end)
+    {
+        return attendanceService.getAttendanceListAll(start, end);
+    }
+
     @GetMapping("/details-list")
     public List<AttendanceDetailResponse> getAttendanceDetailList(
             @RequestParam String employeeNumber,
