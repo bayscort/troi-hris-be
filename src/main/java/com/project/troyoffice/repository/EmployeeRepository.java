@@ -15,6 +15,10 @@ public interface EmployeeRepository
         extends JpaRepository<Employee, UUID>,
         JpaSpecificationExecutor<Employee> {
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT e FROM Employee e WHERE e.id = :id")
+    Optional<Employee> findByIdForUpdate(@org.springframework.data.repository.query.Param("id") UUID id);
+
     List<Employee> findByActiveTrue(Sort sort);
 
     boolean existsByEmployeeNumber(String employeeNumber);

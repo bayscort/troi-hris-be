@@ -36,7 +36,8 @@ public class PlacementService {
 
     // 5. DEPLOY EMPLOYEE
     public Placement deployEmployee(DeployEmployeeRequest req) {
-        Employee employee = employeeRepository.findById(req.getEmployeeId())
+        // Fix Concurrency: Use PESSIMISTIC_WRITE lock
+        Employee employee = employeeRepository.findByIdForUpdate(req.getEmployeeId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
 
         if (!employee.getActive()) {
