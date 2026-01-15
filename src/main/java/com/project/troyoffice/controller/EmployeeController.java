@@ -44,7 +44,7 @@ public class EmployeeController {
     @PutMapping("/{id}")
     public ResponseEntity<UUID> update(@PathVariable(name = "id") UUID id,
                                        @RequestBody EmployeeRequestDTO dto) {
-        employeeService.update(dto);
+        employeeService.update(id, dto);
         return ResponseEntity.ok(id);
     }
 
@@ -55,9 +55,6 @@ public class EmployeeController {
         return ResponseEntity.noContent().build();
     }
 
-    // FEATURE: Talent Pool & Active Employee
-    // GET /api/v1/employees?status=BENCH
-    // GET /api/v1/employees?status=DEPLOYED
     @GetMapping("/list")
     public ResponseEntity<List<EmployeeListResponse>> getEmployees(
             @RequestParam(defaultValue = "DEPLOYED") String status) {
@@ -67,22 +64,6 @@ public class EmployeeController {
         } else {
             return ResponseEntity.ok(employeeService.getDeployedEmployees());
         }
-    }
-
-    // FEATURE: Onboarding
-    @PostMapping("/onboard")
-    public ResponseEntity<Employee> onboard(@RequestBody @Valid OnboardEmployeeRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(employeeService.onboardEmployee(request));
-    }
-
-    // FEATURE: Offboarding
-    @PostMapping("/{id}/offboard")
-    public ResponseEntity<Void> offboard(
-            @PathVariable UUID id,
-            @RequestBody @Valid OffboardRequest request) {
-        employeeService.offboardEmployee(id, request);
-        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/search")

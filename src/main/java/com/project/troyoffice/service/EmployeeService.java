@@ -114,9 +114,9 @@ public class EmployeeService {
         return employeeRepository.save(employee).getId();
     }
 
-    public UUID update(EmployeeRequestDTO dto) {
+    public UUID update(UUID id, EmployeeRequestDTO dto) {
 
-        Employee employee = employeeRepository.findById(dto.getId())
+        Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Employee not found"));
 
         // =========================
