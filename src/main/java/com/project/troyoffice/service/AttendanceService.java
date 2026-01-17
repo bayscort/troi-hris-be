@@ -65,8 +65,8 @@ public class AttendanceService {
                 .findByEmployeeAndCheckInTimeAfter(employee, startOfDay);
 
         // A. Tentukan Status Verifikasi Lokasi
-//        boolean isLocationValid = isWithinRadius(employee,
-//                request.getLatitude(), request.getLongitude());
+        // boolean isLocationValid = isWithinRadius(employee,
+        // request.getLatitude(), request.getLongitude());
 
         boolean isLocationValid = true;
 
@@ -104,7 +104,6 @@ public class AttendanceService {
         return attendanceMapper.toDTO(saved);
     }
 
-
     private AttendanceResponse checkOut(Attendance attendance, AttendanceRequest request, VerificationStatus status) {
         if (attendance.getCheckOutTime() != null) {
             throw new RuntimeException("Anda sudah melakukan Check-Out hari ini.");
@@ -134,7 +133,6 @@ public class AttendanceService {
         return attendanceMapper.toDTO(saved);
     }
 
-
     public AttendanceResponse getTodayDetail() {
         User user = userContext.getCurrentUser();
 
@@ -148,7 +146,7 @@ public class AttendanceService {
         return attendanceMapper.toDTO(attendance);
     }
 
-    public List<AttendanceResponse> getAttendanceList( LocalDate startDate, LocalDate endDate) {
+    public List<AttendanceResponse> getAttendanceList(LocalDate startDate, LocalDate endDate) {
         User user = userContext.getCurrentUser();
 
         Employee employee = employeeRepository.findByUser(user)
@@ -165,7 +163,7 @@ public class AttendanceService {
                 .collect(Collectors.toList());
     }
 
-    public List<AttendanceResponse> getAttendanceListAll( LocalDate startDate, LocalDate endDate) {
+    public List<AttendanceResponse> getAttendanceListAll(LocalDate startDate, LocalDate endDate) {
 
         LocalDateTime start = startDate.atStartOfDay();
         LocalDateTime end = endDate.atTime(LocalTime.MAX);
@@ -184,7 +182,8 @@ public class AttendanceService {
                 .collect(Collectors.toList());
     }
 
-    public List<AttendanceDetailResponse> getAttendanceDetailList(String employeeNumber, LocalDate startDate, LocalDate endDate) {
+    public List<AttendanceDetailResponse> getAttendanceDetailList(String employeeNumber, LocalDate startDate,
+            LocalDate endDate) {
 
         Employee employee = employeeRepository.findByEmployeeNumber(employeeNumber)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
@@ -220,14 +219,13 @@ public class AttendanceService {
     }
 
     private AttendanceStatsResponse calculateStats(
-            Employee employee, LocalDate startDate, LocalDate endDate, List<Attendance> attendanceList)
-    {
+            Employee employee, LocalDate startDate, LocalDate endDate, List<Attendance> attendanceList) {
         LocalTime ON_TIME_CUTOFF = LocalTime.of(8, 0);
 
         int totalWorkingDays = 0;
         int daysPresent = attendanceList.size();
         int daysLateCheckIn = 0;
-//        long totalMinutesWorked = 0;
+        // long totalMinutesWorked = 0;
 
         for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
             if (date.getDayOfWeek() != DayOfWeek.SATURDAY && date.getDayOfWeek() != DayOfWeek.SUNDAY) {
@@ -243,7 +241,8 @@ public class AttendanceService {
 
         AttendanceStatsResponse response = new AttendanceStatsResponse();
         response.setEmployeeName(employee.getFullName());
-        response.setMonthYear(startDate.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + startDate.getYear());
+        response.setMonthYear(
+                startDate.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + startDate.getYear());
         response.setTotalWorkingDays(totalWorkingDays);
         response.setDaysPresent(daysPresent);
         response.setDaysAbsent(totalWorkingDays - daysPresent);
@@ -254,7 +253,7 @@ public class AttendanceService {
 
     private boolean isWithinRadius(Employee employee, double checkLat, double checkLon) {
 
-        Optional<Placement> placementOpt =  placementRepository.findPlacementByEmployeeAndIsActiveTrue(employee);
+        Optional<Placement> placementOpt = placementRepository.findPlacementByEmployeeAndIsActiveTrue(employee);
 
         if (placementOpt.isEmpty()) {
             return false;
@@ -273,7 +272,8 @@ public class AttendanceService {
         double lat1Rad = Math.toRadians(officeLat);
         double lat2Rad = Math.toRadians(checkLat);
 
-        // Bagian pertama Rumus Haversine: a = sin²(Δlat/2) + cos(lat1) * cos(lat2) * sin²(Δlon/2)
+        // Bagian pertama Rumus Haversine: a = sin²(Δlat/2) + cos(lat1) * cos(lat2) *
+        // sin²(Δlon/2)
         double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
                 Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
 
@@ -290,37 +290,91 @@ public class AttendanceService {
         return distanceMeter <= MAX_DISTANCE_METER;
     }
 
-    public String reverseGeocode(double lat, double lon) {
+    private final java.util.concurrent.ConcurrentHashMap<String, String> addressCache = new java.util.concurrent.ConcurrentHashMap<>();
 
-        String url = String.format(
-                "https://nominatim.openstreetmap.org/reverse?format=json&lat=%f&lon=%f&addressdetails=1",
-                lat, lon
-        );
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("User-Agent", "MyApp");
-
-        HttpEntity<String> entity = new HttpEntity<>(headers);
-
-        ResponseEntity<Map> response =
-                restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
-
-        Map body = response.getBody();
-
-        if (body == null || !body.containsKey("address")) {
-            return "Unknown location";
+    // Limit cache size to prevent memory leaks over time
+    private void evictCacheIfNeeded() {
+        if (addressCache.size() > 2000) {
+            addressCache.clear();
         }
+    }
 
-        Map address = (Map) body.get("address");
+    public String reverseGeocode(double lat, double lon) {
+        // Round to 3 decimal places (~110m precision) to increase cache hit rate for
+        // employees in same building
+        // This makes it scalable for 100+ users clocking in at the same office.
+        String key = String.format("%.3f,%.3f", lat, lon);
 
-        String suburb = (String) address.getOrDefault("suburb", "");
-        String district = (String) address.getOrDefault("city_district", "");
-        String city = (String) address.getOrDefault("city", "");
-        String country = (String) address.getOrDefault("country", "");
+        evictCacheIfNeeded();
 
-        return String.format("%s, %s, %s, %s",
-                suburb, district, city, country
-        ).replaceAll("(^, |, ,| ,$)", "").trim();
+        return addressCache.computeIfAbsent(key, k -> fetchAddressFromPhoton(k));
+    }
+
+    private String fetchAddressFromPhoton(String key) {
+        try {
+            String[] parts = key.split(",");
+            String lat = parts[0];
+            String lon = parts[1];
+
+            // Use Photon (Komoot) which is a free, scalable OSM-based geocoder
+            String url = String.format(
+                    "https://photon.komoot.io/reverse?lat=%s&lon=%s",
+                    lat, lon);
+
+            HttpHeaders headers = new HttpHeaders();
+            // Good practice to provide a clear User-Agent
+            headers.set("User-Agent", "TroyOffice-HRIS/1.0");
+
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
+
+            Map body = response.getBody();
+
+            if (body == null || !body.containsKey("features")) {
+                return "Unknown location";
+            }
+
+            List<Map> features = (List<Map>) body.get("features");
+            if (features.isEmpty()) {
+                return "Unknown location";
+            }
+
+            Map properties = (Map) features.get(0).get("properties");
+
+            String name = (String) properties.getOrDefault("name", "");
+            String street = (String) properties.getOrDefault("street", "");
+            String district = (String) properties.getOrDefault("district", "");
+            String city = (String) properties.getOrDefault("city", "");
+            String country = (String) properties.getOrDefault("country", "");
+
+            // Construct address priority: Name/Street -> District -> City -> Country
+            StringBuilder address = new StringBuilder();
+
+            if (!name.isEmpty())
+                address.append(name).append(", ");
+            else if (!street.isEmpty())
+                address.append(street).append(", ");
+
+            if (!district.isEmpty())
+                address.append(district).append(", ");
+            if (!city.isEmpty())
+                address.append(city).append(", ");
+            if (!country.isEmpty())
+                address.append(country);
+
+            String result = address.toString();
+            if (result.endsWith(", ")) {
+                result = result.substring(0, result.length() - 2);
+            }
+
+            return result.isEmpty() ? "Unknown location" : result;
+
+        } catch (Exception e) {
+            log.error("Geocoding failed for key {}: {}", key, e.getMessage());
+            // Return a fallback or the raw coordinates in case of failure, don't crash
+            return "Lat: " + key;
+        }
     }
 
 }
